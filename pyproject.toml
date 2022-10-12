@@ -5,6 +5,9 @@ description = ""
 authors = ["Hiroki Ishioka <ishioka0222@gmail.com>"]
 readme = "README.md"
 
+[tool.poetry.scripts]
+ndldc = "ndldc.cli:main"
+
 [tool.poetry.dependencies]
 python = "^3.10"
 click = "^8.1.3"
