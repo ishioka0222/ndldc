@@ -10,5 +10,5 @@
 git clone git@github.com:ishioka0222/ndldc.git
 cd ndldc
 poetry install --no-dev
-poetry run ndldc download --username ユーザー名 --password パスワード https://dl.ndl.go.jp/info:ndljp/pid/1383303
+poetry run ndldc download --username ユーザー名 --password パスワード https://dl.ndl.go.jp/info:ndljp/pid/1371110
 ```
