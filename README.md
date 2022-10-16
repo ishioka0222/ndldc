@@ -1,6 +1,6 @@
 # ndldc
 
-国立国会図書館デジタルコレクション / National Diet Library Digital Collectionから資料の画像をダウンロードします。
+国立国会図書館デジタルコレクション / National Diet Library Digital Collectionsから資料の画像をダウンロードします。
 
 ## 注意
 
