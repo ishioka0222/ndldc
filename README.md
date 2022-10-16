@@ -46,4 +46,7 @@ IIIFマニフェストURIにアクセスすることで得られるJSONファイ
 
 ## 連絡先
 
-ishioka0222 at gmail.com
+<dl>
+    <dt>メールアドレス</dt>
+    <dd>ishioka0222 at gmail.com</dd>
+</dl>
