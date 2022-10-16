@@ -1,7 +1,3 @@
-import requests
-import lxml.html
-
-
 class Metadata:
     def __init__(self, dictionary):
         self.dictionary = dictionary

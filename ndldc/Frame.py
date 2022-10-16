@@ -1,9 +1,6 @@
-import re
-import json
 import ast
-
-import requests
 import lxml.html
+import re
 
 from .Metadata import Metadata
 
