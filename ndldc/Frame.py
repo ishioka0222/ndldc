@@ -10,21 +10,21 @@ class Frame:
         self.tree = tree
         self.metadata = Metadata.from_tree(tree)
 
-    def get_hidden_content_value(self, key):
+    def get_hidden_input_value(self, key):
         input = self.tree.xpath(f'//input[@id="{key}"]')[0]
         value = input.attrib["value"]
         return value
 
     def get_content_image_root_path(self):
-        value = self.get_hidden_content_value("viewer-content-image-root-path")
+        value = self.get_hidden_input_value("viewer-content-image-root-path")
         return value
 
     def get_content_id(self):
-        value = self.get_hidden_content_value("viewer-content-id")
+        value = self.get_hidden_input_value("viewer-content-id")
         return value
 
     def get_content_custom_param(self):
-        value = self.get_hidden_content_value("viewer-content-custom-param")
+        value = self.get_hidden_input_value("viewer-content-custom-param")
         data = ast.literal_eval(value)
         return data
 
