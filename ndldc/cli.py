@@ -34,7 +34,7 @@ def download(url, username, password):
     frame = Frame.from_html(html)
 
     # store content metadata
-    frame_count = frame.get_frame_count()
+    frame_count = frame.get_last_content_no()
     content_root_url = frame.metadata["identifier:URI"]
     num_of_digits = len(str(frame_count))
 

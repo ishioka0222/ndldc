@@ -28,12 +28,10 @@ class Frame:
         data = ast.literal_eval(value)
         return data
 
-    def get_frame_count(self):
-        a = self.tree.xpath('//a[@class="ndltree-item ndltree-label"]')[0]
-        text = a.text_content()
-        match = re.match(r"(.+) \[(?P<frame_count>\d+)\]", text)
-        frame_count = int(match.group("frame_count"))
-        return frame_count
+    def get_last_content_no(self):
+        value = self.get_hidden_input_value("lastContentNo")
+        last_content_no = int(value)
+        return last_content_no
 
     @staticmethod
     def from_html(html):
