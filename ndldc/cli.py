@@ -82,7 +82,6 @@ def download(url, username, password):
         columns = math.ceil(image_width / tile_width)
         rows = math.ceil(image_height / tile_height)
         whole_size = (image_width, image_height)
-        tile_size = (tile_width, tile_height)
 
         # prepare image
         whole_image = Image.new(mode="RGB", size=whole_size)
