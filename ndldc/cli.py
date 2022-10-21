@@ -23,22 +23,22 @@ def cli():
 def download(url, username, password):
     # TODO: Downloaderクラスなどを作りリファクタリングする
 
-    # create session
+    # セッションを作成する
     session = Session()
 
-    # login
+    # ログインする
     session.login(username, password)
 
-    # fetch frame to get book metadata
+    # コンテンツのメタデータを取得する
     html = session.get(url=url)
     frame = Frame.from_html(html)
 
-    # store content metadata
+    # コンテンツのメタデータを保持する
     frame_count = frame.get_last_content_no()
     content_root_url = frame.metadata["identifier:URI"]
     num_of_digits = len(str(frame_count))
 
-    # create directory
+    # ディレクトリを作成する
     # TODO: volumeが存在しない場合を考慮する
     # TODO: titleやvolumeにファイル名に使えない文字が含まれている場合を考慮する
     title = frame.metadata["title"]
@@ -47,7 +47,7 @@ def download(url, username, password):
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
 
-    # download
+    # コンテンツをダウンロードする
     for i in range(1, frame_count + 1):
         filename = f"{dir_name}/{i:0{num_of_digits}}.jpg"
 
@@ -57,12 +57,12 @@ def download(url, username, password):
 
         print(f"downloading page {i}/{frame_count}")
 
-        # fetch frame
+        # ページのメタデータを取得する
         frame_url = f"{content_root_url}/{i}"
         content = session.get(url=frame_url)
         frame = Frame.from_html(content)
 
-        # fetch image info
+        # ページの情報を取得する
         root_url = "https://dl.ndl.go.jp"
         path = frame.get_content_image_root_path()
         content_id = frame.get_content_id()
@@ -72,7 +72,7 @@ def download(url, username, password):
         content = session.get(url=info_url, params=common_params)
         info = json.loads(content)
 
-        # store metadata
+        # ページのメタデータを保持する
         max_zoom_level = info["maxZoomLevel"]
         image_width = info["imageWidth"]
         image_height = info["imageHeight"]
@@ -83,19 +83,19 @@ def download(url, username, password):
         rows = math.ceil(image_height / tile_height)
         whole_size = (image_width, image_height)
 
-        # prepare image
+        # 全体画像を準備する
         whole_image = Image.new(mode="RGB", size=whole_size)
 
-        # download, decrypt and paste tiles
+        # ダウンロード、復号、ペーストを行う
         for row in range(rows):
             for column in range(columns):
                 print(f"    downloading tile col={column}, row={row}")
 
-                # build url
+                # URLを作成する
                 tile_url = info_url.replace("/info/", "/tile/")
                 tile_url = f"{tile_url}/{max_zoom_level}/{column}_{row}.jpg"
 
-                # build params
+                # リクエストパラメーターを作成する
                 x = column * tile_width
                 y = row * tile_height
                 tile_params = {
@@ -108,23 +108,25 @@ def download(url, username, password):
                 }
                 tile_params.update(common_params)
 
-                # download
+                # タイル画像をダウンロードする
                 content = session.get(url=tile_url, params=tile_params)
 
-                # decrypt
+                # AESで復号する
                 key = info["ck"].encode('utf-8')
                 iv = key[:16]
                 cipher = AES.new(key=key, mode=AES.MODE_CBC, iv=iv)
                 decrypted = cipher.decrypt(content)
 
-                # paste
+                # タイル画像を貼り付ける
                 buffer = io.BytesIO(decrypted)
                 tile_image = Image.open(buffer)
                 whole_image.paste(tile_image, (x, y))
 
+                # タイル画像のダウンロードを1.5秒間隔で行う
+                # NOTE: あまり頻繁にアクセスを行わないように注意する
                 time.sleep(1.5)
 
-        # save image
+        # 全体画像を保存する
         whole_image.save(filename)
 
 
