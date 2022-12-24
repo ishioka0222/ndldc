@@ -58,9 +58,7 @@ def download(url, username, password):
     search_data = response.json()
 
     # ファイル格納用のディレクトリを作成する
-    title = search_data["item"]["meta"]["0001Dtct"][0]
-    volume = search_data["item"]["meta"]["0007Dtct"][0]
-    dirname = f"{title}_{volume}"
+    dirname = f"{pid}"
     if not os.path.exists(dirname):
         os.mkdir(dirname)
 
