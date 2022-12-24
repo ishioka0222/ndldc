@@ -1,6 +1,17 @@
 # ndldc
 
-国立国会図書館デジタルコレクション / National Diet Library Digital Collectionsから資料の画像をダウンロードします。
+本ソフトウェアを使用することで、国立国会図書館デジタルコレクション / National Diet Library Digital Collectionsから資料の画像をダウンロードできます。
+
+国立国会図書館デジタルコレクションにおいて、ログインなしで閲覧可能な資料については、本ソフトウェアを使用しなくても、資料ページ右下のメニューからJPG/PDFをダウンロードすることができます。
+
+<div align="center">
+    <img src="./doc/download.png" width="320" style="margin: 0 auto;">
+</div>
+
+本ソフトウェアは、このメニューからは利用できない、以下の機能を提供します。
+
+- 個人送信でしか閲覧できない資料のダウンロード
+- 資料の画像を目次付きのPDFに変換してダウンロード
 
 ## 使い方
 
