@@ -1,18 +1,23 @@
 from Crypto.Cipher import AES
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
 from PIL import Image
+import base64
 import click
 import io
 import json
-import math
 import os
+import random
+import re
+import requests
 import time
-
-from . Frame import Frame
-from . Session import Session
+import urllib
 
 
 @click.group()
 def cli():
+    # メインの処理は各コマンドで行う
     pass
 
 
@@ -21,113 +26,184 @@ def cli():
 @click.option('--username', required=True)
 @click.option('--password', required=True)
 def download(url, username, password):
-    # TODO: Downloaderクラスなどを作りリファクタリングする
+    # URLからpidを取得する
+    url_pattern = r"https://dl.ndl.go.jp/pid/(\d+)/.*"
+    match = re.match(url_pattern, url)
+    if match is None:
+        raise Exception("invalid url")
+    pid = match.group(1)
+
+    # ピース情報取得のためのPEM形式の公開鍵と秘密鍵を生成する
+    rsa_key_pair = RSA.generate(1024)
+    public_key_string = rsa_key_pair.publickey().exportKey().decode()
 
     # セッションを作成する
-    session = Session()
+    session = requests.Session()
 
     # ログインする
-    session.login(username, password)
+    login_url = "https://dl.ndl.go.jp/api/auth/sso/login"
+    payload = {
+        "cardId": username,
+        "password": password,
+    }
+    response = session.post(url=login_url, json=payload)
+    if response.status_code != 200:
+        raise Exception("login failed")
 
-    # コンテンツのメタデータを取得する
-    html = session.get(url=url)
-    frame = Frame.from_html(html)
+    # メタデータを取得する
+    search_url = f"https://dl.ndl.go.jp/api/item/search/info:ndljp/pid/{pid}"
+    response = session.get(url=search_url)
+    if response.status_code != 200:
+        raise Exception("search request failed")
+    search_data = response.json()
 
-    # コンテンツのメタデータを保持する
-    frame_count = frame.get_last_content_no()
-    content_root_url = frame.metadata["identifier:URI"]
-    num_of_digits = len(str(frame_count))
+    # ファイル格納用のディレクトリを作成する
+    title = search_data["item"]["meta"]["0001Dtct"][0]
+    volume = search_data["item"]["meta"]["0007Dtct"][0]
+    dirname = f"{title}_{volume}"
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
 
-    # ディレクトリを作成する
-    # TODO: volumeが存在しない場合を考慮する
-    # TODO: titleやvolumeにファイル名に使えない文字が含まれている場合を考慮する
-    title = frame.metadata["title"]
-    volume = frame.metadata["volume"]
-    dir_name = f"{title}_{volume}"
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
+    # トークンを取得する
+    token_url = f"https://dl.ndl.go.jp/api/restriction/issue/token/info:ndljp/pid/{pid}"
+    response = session.get(url=token_url)
+    if response.status_code != 200:
+        raise Exception("token request failed")
+    token_data = response.json()
+    timestamp = token_data["timestamp"]
+    tokens = token_data["tokens"]
 
-    # コンテンツをダウンロードする
-    for i in range(1, frame_count + 1):
-        filename = f"{dir_name}/{i:0{num_of_digits}}.jpg"
+    for contents_bundle in search_data["item"]["contentsBundles"]:
+        bid = contents_bundle["id"]
+        contents = contents_bundle["contents"]
+        for koma_index, koma in enumerate(contents):
+            # 進捗を表示する
+            padded_content_index = str(koma_index+1).zfill(4)
+            print(f"\t{padded_content_index}枚目のコマを取得中...")
 
-        if os.path.exists(filename):
-            print(f"skipping page {i}/{frame_count}")
-            continue
+            # コマ画像のファイル名を決定する
+            original_filename = koma["originalFileName"]
+            if not original_filename.endswith(".jp2"):
+                raise Exception("invalid file format")
+            filename = original_filename.replace(".jp2", ".jpg")
+            filepath = os.path.join(dirname, filename)
 
-        print(f"downloading page {i}/{frame_count}")
+            # 既にコマ画像が存在する場合はスキップする
+            if (os.path.exists(filepath)):
+                print(f"\t{padded_content_index}枚目のコマは既に存在します")
+                continue
 
-        # ページのメタデータを取得する
-        frame_url = f"{content_root_url}/{i}"
-        content = session.get(url=frame_url)
-        frame = Frame.from_html(content)
+            # コマ情報を取得する
+            cid = koma["id"]
+            komainfo_url = f"https://dl.ndl.go.jp/contents/{pid}/{bid}/{cid}/komainfo.json"
+            response = session.get(url=komainfo_url)
+            if response.status_code != 200:
+                raise Exception("komainfo request failed")
+            komainfo = response.json()
 
-        # ページの情報を取得する
-        root_url = "https://dl.ndl.go.jp"
-        path = frame.get_content_image_root_path()
-        content_id = frame.get_content_id()
-        common_params = frame.get_content_custom_param()
-        info_url = f"{root_url}{path}/{content_id}"
+            # タイル情報のうち、画像サイズが最大のものを保持する
+            levels = komainfo["Levels"]
+            level = max(
+                levels, key=lambda level: level["OriginWidth"] * level["OriginHeight"])
 
-        content = session.get(url=info_url, params=common_params)
-        info = json.loads(content)
+            # タイル情報を保持する
+            tiles = level["Tiles"]
+            cols = level["TileX"]
+            rows = level["TileY"]
+            tile_size = level["TileSize"]
+            piece_size = tile_size // 4
 
-        # ページのメタデータを保持する
-        max_zoom_level = info["maxZoomLevel"]
-        image_width = info["imageWidth"]
-        image_height = info["imageHeight"]
-        tile_width = info["tileWidth"]
-        tile_height = info["tileHeight"]
+            # ピース情報を取得する
+            deobfucsate_url = f"https://dl.ndl.go.jp/apigw-ex/info/deobfuscate"
+            payload = {
+                "objectKey": f"{pid}_{bid}_{cid}",
+                "pubKeyPem": public_key_string
+            }
+            response = session.post(url=deobfucsate_url, json=payload)
+            encrypted_tile_info = response.text
+            decryptor = PKCS1_v1_5.new(rsa_key_pair)
+            sentinel = get_random_bytes(16)
+            decrypted_tile_info = decryptor.decrypt(
+                base64.b64decode(encrypted_tile_info), sentinel).decode()
+            piece_mapping = list(map(int, decrypted_tile_info.split(",")))
 
-        columns = math.ceil(image_width / tile_width)
-        rows = math.ceil(image_height / tile_height)
-        whole_size = (image_width, image_height)
+            # コマ画像を作成する
+            koma_width = level["OriginWidth"]
+            koma_height = level["OriginHeight"]
+            koma_image = Image.new("RGB", (koma_width, koma_height))
 
-        # 全体画像を準備する
-        whole_image = Image.new(mode="RGB", size=whole_size)
-
-        # ダウンロード、復号、ペーストを行う
-        for row in range(rows):
-            for column in range(columns):
-                print(f"    downloading tile col={column}, row={row}")
-
-                # URLを作成する
-                tile_url = info_url.replace("/info/", "/tile/")
-                tile_url = f"{tile_url}/{max_zoom_level}/{column}_{row}.jpg"
-
-                # リクエストパラメーターを作成する
-                x = column * tile_width
-                y = row * tile_height
-                tile_params = {
-                    "rotate": 0,
-                    "x": x,
-                    "y": y,
-                    "tileWidth": tile_width,
-                    "tileHeight": tile_height,
-                    "extension": "jp2",
-                }
-                tile_params.update(common_params)
-
-                # タイル画像をダウンロードする
-                content = session.get(url=tile_url, params=tile_params)
-
-                # AESで復号する
-                key = info["ck"].encode('utf-8')
-                iv = key[:16]
-                cipher = AES.new(key=key, mode=AES.MODE_CBC, iv=iv)
-                decrypted = cipher.decrypt(content)
-
-                # タイル画像を貼り付ける
-                buffer = io.BytesIO(decrypted)
-                tile_image = Image.open(buffer)
-                whole_image.paste(tile_image, (x, y))
-
-                # タイル画像のダウンロードを1.5秒間隔で行う
+            # 各タイルを取得してkoma_imageに貼り付ける
+            for tile_index, tile_image in enumerate(tiles):
+                # タイル画像のダウンロードを1秒間隔で行う
                 # NOTE: あまり頻繁にアクセスを行わないように注意する
-                time.sleep(1.5)
+                time.sleep(1)
 
-        # 全体画像を保存する
-        whole_image.save(filename)
+                # 進捗を表示する
+                padded_tile_index = str(tile_index+1).zfill(4)
+                print(f"\t\t{padded_tile_index}枚目のタイルを取得中...")
+
+                tile_url = urllib.parse.urljoin(
+                    f"https://dl.ndl.go.jp/contents/{pid}/{bid}/{cid}/", tile_image)
+
+                # ランダムな4桁の数字からなるIDを生成する
+                # NOTE: このIDが実際には何を表しているのかは不明
+                digits = 4
+                id_ = random.randrange(10**(digits-1), 10**digits)
+                # tokenを生成する
+                data = {
+                    "cid": cid,
+                    "token": tokens[cid],
+                    "timestamp": timestamp,
+                    "id": id_
+                }
+
+                # paramsを生成する
+                # NOTE: json.dumps()で生成した文字列にスペースが含まれると、
+                # リクエストが失敗するので、separatorsオプションを指定する
+                payload = {
+                    "token": json.dumps(data, separators=(',', ':'))
+                }
+
+                # タイルを取得する
+                response = session.get(url=tile_url, params=payload)
+                if response.status_code != 200:
+                    raise Exception("tile request failed")
+                tile_data = response.content
+
+                # タイルに含まれるピースを並べ替える
+                tile_image = Image.open(io.BytesIO(tile_data))
+                unpuzzled_tile_image = Image.new(
+                    "RGB", (tile_size, tile_size))
+
+                actual_tile_size = tile_image.size[0]
+                actual_piece_size = actual_tile_size // 4
+                padding_size = (actual_piece_size - piece_size) // 2
+                for src_piece_index, dest_piece_index in enumerate(piece_mapping):
+                    src_x = (src_piece_index % 4) * \
+                        actual_piece_size + padding_size
+                    src_y = (src_piece_index // 4) * \
+                        actual_piece_size + padding_size
+                    src_rect = (
+                        src_x,
+                        src_y,
+                        src_x + piece_size,
+                        src_y + piece_size
+                    )
+                    dest_x = (dest_piece_index % 4) * piece_size
+                    dest_y = (dest_piece_index // 4) * piece_size
+
+                    piece = tile_image.crop(src_rect)
+                    unpuzzled_tile_image.paste(piece, (dest_x, dest_y))
+
+                # 並べ替えたタイルをコマ画像に貼り付ける
+                col = tile_index % cols
+                row = tile_index // cols
+                x = col * tile_size
+                y = row * tile_size
+                koma_image.paste(unpuzzled_tile_image, (x, y))
+
+            # コマ画像を保存する
+            koma_image.save(filepath)
 
 
 def main():

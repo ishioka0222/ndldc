@@ -8,7 +8,7 @@
 個人送信を利用しなくても閲覧できる資料については、IIIFマニフェストURIなどを利用してダウンロードしてください。
 （本ソフトウェアは、個人送信を利用しなくても閲覧できる資料には対応していません。）
 
-例えば、`http://dl.ndl.go.jp/info:ndljp/pid/922693`の資料に対するIIIFマニフェストURIは`https://www.dl.ndl.go.jp/api/iiif/922693/manifest.json`になります。
+例えば、`https://dl.ndl.go.jp/pid/922693/1/1`の資料に対するIIIFマニフェストURIは`https://dl.ndl.go.jp/api/iiif/922693/manifest.json`になります。
 IIIFマニフェストURIにアクセスすることで得られるJSONファイルの`sequences`以下に、資料の各ページの画像のURIが記載されています。
 これを利用して簡単なスクリプトを書けば、資料をダウンロードできます。
 
@@ -38,7 +38,7 @@ IIIFマニフェストURIにアクセスすることで得られるJSONファイ
     引数には、ダウンロードしたい資料のURLを指定します。
     ユーザー名とパスワードは、個人送信に登録した際に入力したものを指定します。
     ```bash
-    poetry run ndldc download --username ユーザー名 --password パスワード https://dl.ndl.go.jp/info:ndljp/pid/1371110
+    poetry run ndldc download --username ユーザー名 --password パスワード https://dl.ndl.go.jp/pid/1371110/1/1
     ```
 
 ## ライセンス
