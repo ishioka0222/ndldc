@@ -238,7 +238,7 @@ def download_non_iiif(dest_dir, search_data, username, password):
         for tile_index, tile_image in enumerate(tiles):
             # タイル画像のダウンロードを1秒間隔で行う
             # NOTE: あまり頻繁にアクセスを行わないように注意する
-            # time.sleep(1)
+            time.sleep(1)
 
             # 進捗を表示する
             padded_tile_index = str(tile_index+1).zfill(4)
