@@ -87,7 +87,7 @@ def download(url, username, password):
 
             # 既にコマ画像が存在する場合はスキップする
             if (os.path.exists(filepath)):
-                print(f"\t{padded_content_index}枚目のコマは既に存在します")
+                print(f"\t\t{padded_content_index}枚目のコマは既に存在します")
                 continue
 
             # コマ情報を取得する
