@@ -26,7 +26,7 @@ def cli():
 @click.option('--password')
 def download(url, username, password):
     # URLからpidを取得する
-    url_pattern = r"https://dl.ndl.go.jp/pid/(\d+)/.*"
+    url_pattern = r"https://dl.ndl.go.jp/pid/(\d+).*"
     match = re.match(url_pattern, url)
     if match is None:
         raise Exception("URLの形式が正しくありません")
