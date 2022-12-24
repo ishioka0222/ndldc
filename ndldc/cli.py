@@ -12,6 +12,8 @@ import re
 import requests
 import time
 import urllib
+import img2pdf
+import glob
 
 
 @click.group()
@@ -24,7 +26,8 @@ def cli():
 @click.argument('url')
 @click.option('--username')
 @click.option('--password')
-def download(url, username, password):
+@click.option('--pdf', is_flag=True)
+def download(url, username, password, pdf):
     # URLからpidを取得する
     url_pattern = r"https://dl.ndl.go.jp/pid/(\d+).*"
     match = re.match(url_pattern, url)
@@ -53,6 +56,17 @@ def download(url, username, password):
             raise Exception(
                 "このコンテンツをダウンロードするにはusernameとpasswordを指定する必要があります")
         download_non_iiif(dirname, search_data, username, password)
+
+    # PDFを作成する
+    if pdf:
+        # PDFのファイル名を決定する
+        pdf_filename = f"{pid}.pdf"
+
+        # img2pdfを使用してPDFを作成する
+        koma_list = glob.glob(f"{dirname}/*.jpg")
+        pdf_data = img2pdf.convert(koma_list)
+        with open(pdf_filename, "wb") as f:
+            f.write(pdf_data)
 
 
 def download_iiif(dest_dir, iiif_manifest_url):
