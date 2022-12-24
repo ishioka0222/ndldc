@@ -29,14 +29,14 @@ def download(url, username, password):
     url_pattern = r"https://dl.ndl.go.jp/pid/(\d+)/.*"
     match = re.match(url_pattern, url)
     if match is None:
-        raise Exception("invalid url")
+        raise Exception("URLの形式が正しくありません")
     pid = match.group(1)
 
     # メタデータを取得する
     search_url = f"https://dl.ndl.go.jp/api/item/search/info:ndljp/pid/{pid}"
     response = requests.get(url=search_url)
     if response.status_code != 200:
-        raise Exception("search request failed")
+        raise Exception("メタデータの取得に失敗しました")
     search_data = response.json()
 
     # ファイル格納用のディレクトリを作成する
@@ -51,7 +51,7 @@ def download(url, username, password):
     else:
         if (username is None) or (password is None):
             raise Exception(
-                "username and password are required for non-iiif content")
+                "このコンテンツをダウンロードするにはusernameとpasswordを指定する必要があります")
         download_non_iiif(dirname, search_data, username, password)
 
 
@@ -62,18 +62,16 @@ def download_iiif(dest_dir, iiif_manifest_url):
 
     response = requests.get(iiif_manifest_url)
     if response.status_code != 200:
-        raise Exception("iiif manifest request failed")
+        raise Exception("IIIFマニフェストの取得に失敗しました")
     manifest = response.json()
     sequences = manifest["sequences"]
-    if len(sequences) != 1:
-        raise Exception("invalid manifest")
 
     canvases = sequences[0]["canvases"]
     for canvas in canvases:
 
         label = canvas["label"]
         padded_label = label.zfill(4)
-        print(f"\t{padded_label}枚目のコマを取得中...")
+        print(f"\t{padded_label}枚目のコマ画像を取得中...")
 
         # コマ画像のファイル名を決定する
         filename = f"{padded_label}.jpg"
@@ -88,7 +86,7 @@ def download_iiif(dest_dir, iiif_manifest_url):
         koma_url = canvas["images"][0]["resource"]["@id"]
         response = requests.get(koma_url)
         if response.status_code != 200:
-            raise Exception("koma request failed")
+            raise Exception("コマ画像の取得に失敗しました")
 
         # コマ画像を保存する
         koma_data = response.content
@@ -123,13 +121,13 @@ def download_non_iiif(dest_dir, search_data, username, password):
     }
     response = session.post(url=login_url, json=payload)
     if response.status_code != 200:
-        raise Exception("login failed")
+        raise Exception("ログインに失敗しました")
 
     # トークンを取得する
     token_url = f"https://dl.ndl.go.jp/api/restriction/issue/token/info:ndljp/pid/{pid}"
     response = session.get(url=token_url)
     if response.status_code != 200:
-        raise Exception("token request failed")
+        raise Exception("トークンの取得に失敗しました")
     token_data = response.json()
     timestamp = token_data["timestamp"]
     tokens = token_data["tokens"]
@@ -140,12 +138,10 @@ def download_non_iiif(dest_dir, search_data, username, password):
         for koma_index, koma in enumerate(contents):
             # 進捗を表示する
             padded_content_index = str(koma_index+1).zfill(4)
-            print(f"\t{padded_content_index}枚目のコマを取得中...")
+            print(f"\t{padded_content_index}枚目のコマ画像を取得中...")
 
             # コマ画像のファイル名を決定する
             original_filename = koma["originalFileName"]
-            if not original_filename.endswith(".jp2"):
-                raise Exception("invalid file format")
             filename = original_filename.replace(".jp2", ".jpg")
             filepath = os.path.join(dest_dir, filename)
 
@@ -159,7 +155,7 @@ def download_non_iiif(dest_dir, search_data, username, password):
             komainfo_url = f"https://dl.ndl.go.jp/contents/{pid}/{bid}/{cid}/komainfo.json"
             response = session.get(url=komainfo_url)
             if response.status_code != 200:
-                raise Exception("komainfo request failed")
+                raise Exception("コマ情報の取得に失敗しました")
             komainfo = response.json()
 
             # タイル情報のうち、画像サイズが最大のものを保持する
@@ -225,13 +221,13 @@ def download_non_iiif(dest_dir, search_data, username, password):
                     "token": json.dumps(data, separators=(',', ':'))
                 }
 
-                # タイルを取得する
+                # タイル画像を取得する
                 response = session.get(url=tile_url, params=payload)
                 if response.status_code != 200:
-                    raise Exception("tile request failed")
+                    raise Exception("タイル画像の取得に失敗しました")
                 tile_data = response.content
 
-                # タイルに含まれるピースを並べ替える
+                # タイル画像に含まれるピースを並べ替える
                 tile_image = Image.open(io.BytesIO(tile_data))
                 unpuzzled_tile_image = Image.new(
                     "RGB", (tile_size, tile_size))
