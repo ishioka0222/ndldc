@@ -22,8 +22,8 @@ def cli():
 
 @cli.command()
 @click.argument('url')
-@click.option('--username', required=True)
-@click.option('--password', required=True)
+@click.option('--username')
+@click.option('--password')
 def download(url, username, password):
     # URLからpidを取得する
     url_pattern = r"https://dl.ndl.go.jp/pid/(\d+)/.*"
@@ -31,6 +31,82 @@ def download(url, username, password):
     if match is None:
         raise Exception("invalid url")
     pid = match.group(1)
+
+    # メタデータを取得する
+    search_url = f"https://dl.ndl.go.jp/api/item/search/info:ndljp/pid/{pid}"
+    response = requests.get(url=search_url)
+    if response.status_code != 200:
+        raise Exception("search request failed")
+    search_data = response.json()
+
+    # ファイル格納用のディレクトリを作成する
+    dirname = f"{pid}"
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
+
+    # IIIF対応の場合はIIIF APIを使用してダウンロードする
+    iiif_manifest_url = search_data["item"]["iiifManifestUrl"]
+    if iiif_manifest_url is not None:
+        download_iiif(dirname, iiif_manifest_url)
+    else:
+        if (username is None) or (password is None):
+            raise Exception(
+                "username and password are required for non-iiif content")
+        download_non_iiif(dirname, search_data, username, password)
+
+
+def download_iiif(dest_dir, iiif_manifest_url):
+    # ダウンロード方法を表示する
+    print("IIIFに対応したコンテンツです...")
+    print("IIIFマニフェストを使用してダウンロードします（高速）...")
+
+    response = requests.get(iiif_manifest_url)
+    if response.status_code != 200:
+        raise Exception("iiif manifest request failed")
+    manifest = response.json()
+    sequences = manifest["sequences"]
+    if len(sequences) != 1:
+        raise Exception("invalid manifest")
+
+    canvases = sequences[0]["canvases"]
+    for canvas in canvases:
+
+        label = canvas["label"]
+        padded_label = label.zfill(4)
+        print(f"\t{padded_label}枚目のコマを取得中...")
+
+        # コマ画像のファイル名を決定する
+        filename = f"{padded_label}.jpg"
+        filepath = os.path.join(dest_dir, filename)
+
+        # 既にコマ画像が存在する場合はスキップする
+        if (os.path.exists(filepath)):
+            print(f"\t\t{filepath}は既に存在します")
+            continue
+
+        # コマ画像を取得する
+        koma_url = canvas["images"][0]["resource"]["@id"]
+        response = requests.get(koma_url)
+        if response.status_code != 200:
+            raise Exception("koma request failed")
+
+        # コマ画像を保存する
+        koma_data = response.content
+        with open(filepath, "wb") as f:
+            f.write(koma_data)
+
+        # コマ画像のダウンロードを1秒間隔で行う
+        # NOTE: あまり頻繁にアクセスを行わないように注意する
+        time.sleep(1)
+
+
+def download_non_iiif(dest_dir, search_data, username, password):
+    # ダウンロード方法を表示する
+    print("IIIFに対応していないコンテンツです...")
+    print("IIIFマニフェストを使用せずにダウンロードします（低速）...")
+
+    # ダウンロードするコンテンツのpidを取得する
+    pid = search_data["item"]["itemId"]
 
     # ピース情報取得のためのPEM形式の公開鍵と秘密鍵を生成する
     rsa_key_pair = RSA.generate(1024)
@@ -48,18 +124,6 @@ def download(url, username, password):
     response = session.post(url=login_url, json=payload)
     if response.status_code != 200:
         raise Exception("login failed")
-
-    # メタデータを取得する
-    search_url = f"https://dl.ndl.go.jp/api/item/search/info:ndljp/pid/{pid}"
-    response = session.get(url=search_url)
-    if response.status_code != 200:
-        raise Exception("search request failed")
-    search_data = response.json()
-
-    # ファイル格納用のディレクトリを作成する
-    dirname = f"{pid}"
-    if not os.path.exists(dirname):
-        os.mkdir(dirname)
 
     # トークンを取得する
     token_url = f"https://dl.ndl.go.jp/api/restriction/issue/token/info:ndljp/pid/{pid}"
@@ -83,11 +147,11 @@ def download(url, username, password):
             if not original_filename.endswith(".jp2"):
                 raise Exception("invalid file format")
             filename = original_filename.replace(".jp2", ".jpg")
-            filepath = os.path.join(dirname, filename)
+            filepath = os.path.join(dest_dir, filename)
 
             # 既にコマ画像が存在する場合はスキップする
             if (os.path.exists(filepath)):
-                print(f"\t\t{padded_content_index}枚目のコマは既に存在します")
+                print(f"\t\t{filepath}は既に存在します")
                 continue
 
             # コマ情報を取得する
