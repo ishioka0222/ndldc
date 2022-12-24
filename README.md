@@ -27,6 +27,10 @@
     ```bash
     poetry run ndldc download https://dl.ndl.go.jp/pid/922693/1/1
     ```
+    `--pdf`オプションを指定すると、ダウンロードされた資料が目次付きのPDFで保存されます。
+    ```bash
+    poetry run ndldc download --pdf https://dl.ndl.go.jp/pid/922693/1/1
+    ```
     個人送信でしか閲覧できない資料をダウンロードする場合、個人送信に登録した際のユーザー名とパスワードを`--username`および`--password`オプションで指定します。
     ```bash
     poetry run ndldc download --username ユーザー名 --password パスワード https://dl.ndl.go.jp/pid/1371110/1/1
