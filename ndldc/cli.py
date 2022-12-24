@@ -2,8 +2,11 @@ from Crypto.Cipher import PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from PIL import Image
+from pypdf import PdfReader, PdfWriter
 import base64
 import click
+import glob
+import img2pdf
 import io
 import json
 import os
@@ -12,8 +15,6 @@ import re
 import requests
 import time
 import urllib
-import img2pdf
-import glob
 
 
 @click.group()
@@ -65,8 +66,38 @@ def download(url, username, password, pdf):
         # img2pdfを使用してPDFを作成する
         koma_list = glob.glob(f"{dirname}/*.jpg")
         pdf_data = img2pdf.convert(koma_list)
-        with open(pdf_filename, "wb") as f:
-            f.write(pdf_data)
+
+        # ブックマークの前処理を行う
+        content = search_data["item"]["contentsBundles"][0]
+
+        indices = content["indices"]
+        cid2title = {}  # コンテンツIDから目次のタイトルを取得するための辞書
+        for index in indices:
+            cid = index["contentId"]
+            title = index["index"]
+            cid2title[cid] = title
+
+        contents = content["contents"]
+        page2cid = {}  # ページ番号からコンテンツIDを取得するための辞書
+        for page, content in enumerate(contents):
+            cid = content["id"]
+            page2cid[page] = cid
+
+        page2title = {}  # ページ番号から目次のタイトルを取得するための辞書
+        for page, cid in page2cid.items():
+            if cid in cid2title:
+                title = cid2title[cid]
+                page2title[page] = title
+
+        # ブックマークを追加してPDFを保存する
+        pdf_reader = PdfReader(io.BytesIO(pdf_data))
+        pdf_writer = PdfWriter()
+        pdf_writer.append_pages_from_reader(pdf_reader)
+        for page, title in page2title.items():
+            pdf_writer.add_outline_item(title, page)
+
+        with open(pdf_filename, "wb") as fp:
+            pdf_writer.write(fp)
 
 
 def download_iiif(dest_dir, iiif_manifest_url):
